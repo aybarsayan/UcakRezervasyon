@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uçak Koltuk Rezervasyonu</title>
+    <script src="https://cdn.ethers.io/lib/ethers-5.0.umd.min.js"></script>
+</head>
+<body>
+    <h1>Uçak Koltuk Rezervasyonu</h1>
+    <div id="seats"></div>
+    <p>Toplam Tutar: <span id="totalAmount">0</span> CAM</p>
+    <button id="payButton">Ödeme Yap</button>
+
+    <script>
+        const seats = [
+            // Örnek koltuklar ve fiyatları
+            { id: 1, price: 0.01, type: "Business" },
+            { id: 2, price: 0.008, type: "Window" },
+            // Diğer koltuklar buraya eklenebilir
+        ];
+        let selectedSeats = [];
+        let totalAmount = 0;
+
+        function renderSeats() {
+            const seatsDiv = document.getElementById("seats");
+            seats.forEach(seat => {
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.id = "seat" + seat.id;
+                checkbox.onclick = () => toggleSeat(seat.id, seat.price);
+                seatsDiv.appendChild(checkbox);
+                seatsDiv.appendChild(document.createTextNode(" Koltuk " + seat.id + " (" + seat.type + ") "));
+                seatsDiv.appendChild(document.createElement("br"));
+            });
+        }
+
+        function toggleSeat(seatId, seatPrice) {
+            const index = selectedSeats.findIndex(s => s.id === seatId);
+            if (index > -1) {
+                totalAmount -= selectedSeats[index].price;
+                selectedSeats.splice(index, 1);
+            } else {
+                selectedSeats.push({ id: seatId, price: seatPrice });
+                totalAmount += seatPrice;
+            }
+            document.getElementById("totalAmount").innerText = totalAmount.toFixed(2);
+        }
+
+        async function payWithMetamask() {
+            if (selectedSeats.length === 0) {
+                alert("Lütfen en az bir koltuk seçin.");
+                return;
+            }
+            // Metamask ile ödeme yapma ve akıllı kontrat ile iletişimi sağlama
+            try {
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                const signer = provider.getSigner();
+
+                // Akıllı kontrat adresi ve ABI
+                const contractAddress = "0x59850aa3e18dba095fc7215b86e27bf53e32f9f0";
+                const contractABI = [
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "customer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "seatNumbers",
+				"type": "string"
+			}
+		],
+		"name": "Book",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "seatNumbers",
+				"type": "string"
+			}
+		],
+		"name": "bookSeats",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "bookings",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "customer",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "totalAmount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "seatNumbers",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "index",
+				"type": "uint256"
+			}
+		],
+		"name": "getBooking",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "",
+				"type": "string"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getBookingsCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]; // Akıllı kontratınızın ABI'si
+
+                const contract = new ethers.Contract(contractAddress, contractABI, signer);
+                const seatIds = selectedSeats.map(s => s.id).join(",");
+                const totalCAM = ethers.utils.parseEther(totalAmount.toString());
+
+                // Ödeme işlemi (akıllı kontrat fonksiyonunu çağırma)
+                const tx = await contract.bookSeats(seatIds, { value: totalCAM });
+                await tx.wait();
+                alert("Ödeme başarılı!");
+
+            } catch (error) {
+                console.error(error);
+                alert("Ödeme başarısız.");
+            }
+        }
+
+        window.onload = function() {
+            renderSeats();
+            document.getElementById("payButton").addEventListener("click", payWithMetamask);
+        };
+    </script>
+</body>
+</html>
